@@ -1,0 +1,64 @@
+### 1. Adaugă un artist (Va primi ID-ul 1 în noua bază de date)
+POST http://localhost:8080/api/artists
+Content-Type: application/json
+
+{
+  "name": "Kanye West",
+  "bio": "Hip hop producer and rapper."
+}
+
+###
+
+### 2. Adaugă un album (Va primi ID-ul 1)
+POST http://localhost:8080/api/albums
+Authorization: Basic raul parolagrea
+Content-Type: application/json
+
+{
+  "title": "My Beautiful Dark Twisted Fantasy",
+  "coverUrl": "link_poza.jpg",
+  "releaseDate": "2010-11-22",
+  "artist": {
+    "id": 1
+  }
+}
+
+###
+
+### 3. Adaugă o recenzie (Va primi ID-ul 1)
+POST http://localhost:8080/api/reviews
+Authorization: Basic raul parolagrea
+Content-Type: application/json
+
+{
+  "title": "Un clasic absolut",
+  "content": "Producția este impecabilă, sample-urile sunt tăiate perfect. Unul dintre cele mai bune albume din istorie.",
+  "rating": 10,
+  "album": {
+    "id": 1
+  }
+}
+
+### 4. Cere lista cu toate recenziile (Aici intervine DTO-ul)
+GET http://localhost:8080/api/reviews
+
+### Upload poza album
+POST http://localhost:8080/api/files/upload
+Authorization: Basic raul parolagrea
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="mbdtf.jpg"
+
+< ./mbdtf.jpg
+--WebAppBoundary--
+
+### Adaugă un artist ca Admin
+POST http://localhost:8080/api/artists
+Authorization: Basic raul parolagrea
+Content-Type: application/json
+
+{
+  "name": "Playboi Carti",
+  "bio": "Opium."
+}
