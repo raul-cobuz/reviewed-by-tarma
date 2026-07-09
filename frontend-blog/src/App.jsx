@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 
 const REVIEWS_ENDPOINT = 'http://localhost:8080/api/reviews'
 const FILE_UPLOAD_ENDPOINT = 'http://localhost:8080/api/files/upload'
 
-const ACTION_BUTTON_CLASSES =
-  'transition-transform active:scale-95'
+const ACTION_BUTTON_CLASSES = 'transition-transform active:scale-95'
+
+const TABS = [
+  { id: 'REVIEWS', label: 'Reviews' },
+  { id: 'RANKINGS', label: 'Rankings' },
+  { id: 'DISCUSSION', label: 'Discussion' },
+]
 
 function SkeletonCard() {
   return (
@@ -84,6 +90,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [selectedReview, setSelectedReview] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState('REVIEWS')
+  const [newCategory, setNewCategory] = useState('REVIEWS')
   const [newTitle, setNewTitle] = useState('')
   const [newArtist, setNewArtist] = useState('')
   const [newSummary, setNewSummary] = useState('')
@@ -93,6 +101,7 @@ function App() {
   const [isPublishing, setIsPublishing] = useState(false)
   const [toasts, setToasts] = useState([])
   const [editingId, setEditingId] = useState(null)
+
   const showToast = (message) => {
     const id = Date.now() + Math.random()
     setToasts((prev) => [...prev, { id, message }])
@@ -109,11 +118,7 @@ function App() {
   const fetchReviews = async () => {
     try {
       const response = await fetch(REVIEWS_ENDPOINT)
-
-      if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`)
-      }
-
+      if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
       const data = await response.json()
       setReviews(Array.isArray(data) ? data : [])
     } catch (error) {
@@ -134,21 +139,21 @@ function App() {
     setNewSummary('')
     setNewContent('')
     setNewRating(10)
+    setNewCategory('REVIEWS')
     setSelectedFile(null)
     setEditingId(null)
   }
 
   const getCoverSrc = (coverUrl) => {
     if (!coverUrl) return null
-    if (coverUrl.startsWith('http://') || coverUrl.startsWith('https://')) {
-      return coverUrl
-    }
+    if (coverUrl.startsWith('http://') || coverUrl.startsWith('https://')) return coverUrl
     return `http://localhost:8080${coverUrl}`
   }
 
- const handlePublish = async (event) => {
+  const handlePublish = async (event) => {
     event.preventDefault()
-    if (!newTitle.trim() || !newArtist.trim() || !newSummary.trim() || !newContent.trim()) return
+    if (!newTitle.trim() || !newContent.trim()) return
+    if (newCategory === 'REVIEWS' && (!newArtist.trim() || !newSummary.trim())) return
 
     setIsPublishing(true)
 
@@ -175,12 +180,13 @@ function App() {
           'Content-Type': 'application/json',
           Authorization: `Basic ${btoa('raul:parolagrea')}`,
         },
-        body: JSON.stringify({
+      body: JSON.stringify({
           title: newTitle.trim(),
-          artistName: newArtist.trim(),
-          summary: newSummary.trim(),
+          artistName: newCategory === 'REVIEWS' ? newArtist.trim() : "N/A",
+          summary: newCategory === 'REVIEWS' ? newSummary.trim() : "N/A",
           content: newContent.trim(),
-          rating: parseInt(newRating, 10),
+          rating: newCategory === 'REVIEWS' ? parseInt(newRating, 10) : 10,
+          category: newCategory,
           coverUrl: uploadedCoverUrl || null,
         }),
       })
@@ -189,32 +195,26 @@ function App() {
 
       setIsModalOpen(false)
       resetForm()
-      setEditingId(null) 
       setIsLoading(true)
       await fetchReviews()
-      showToast(editingId ? 'Recenzie actualizată!' : 'Recenzie publicată!')
+      showToast(editingId ? 'Postare actualizată!' : 'Postare publicată!')
     } catch (error) {
       console.log('Error:', error)
-      showToast('Eroare.')
+      showToast('Eroare la salvare.')
     } finally {
       setIsPublishing(false)
     }
   }
+
   const handleDelete = async (id) => {
     try {
       const response = await fetch(`http://localhost:8080/api/reviews/${id}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Basic ${btoa('raul:parolagrea')}`,
-        },
+        headers: { Authorization: `Basic ${btoa('raul:parolagrea')}` },
       })
-
-      if (!response.ok) {
-        throw new Error(`DELETE failed with status ${response.status}`)
-      }
-
+      if (!response.ok) throw new Error(`DELETE failed with status ${response.status}`)
       setReviews((prev) => prev.filter((review) => review.id !== id))
-      showToast('Recenzie ștearsă!')
+      showToast('Postare ștearsă!')
     } catch (error) {
       console.log('Error deleting review:', error)
       showToast('Eroare la ștergere.')
@@ -240,7 +240,7 @@ function App() {
               Reviewed By Tarma
             </p>
             <p className="text-xs uppercase tracking-[0.2em] text-zinc-600 dark:text-zinc-400">
-              album reviews / rankings / music discussion
+              music blog
             </p>
           </div>
 
@@ -257,7 +257,10 @@ function App() {
             {isAdmin ? (
               <button
                 type="button"
-                onClick={() => setIsModalOpen(true)}
+                onClick={() => {
+                  resetForm()
+                  setIsModalOpen(true)
+                }}
                 className={`ml-3 inline-flex items-center border border-zinc-900/20 bg-transparent px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-800 transition hover:border-fuchsia-500 hover:text-fuchsia-600 dark:border-white/20 dark:text-zinc-200 dark:hover:border-pink-400 dark:hover:text-pink-300 ${ACTION_BUTTON_CLASSES}`}
               >
                 New Post
@@ -275,8 +278,24 @@ function App() {
           <h1 className="mb-3 text-4xl font-black leading-tight md:text-5xl">
             Imi dau si eu cu parerea pe net :)
           </h1>
-         
         </header>
+
+        <nav className="mb-8 flex gap-6 border-b border-zinc-900/10 dark:border-white/10">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`pb-3 text-xs font-semibold uppercase tracking-[0.14em] transition ${ACTION_BUTTON_CLASSES} ${
+                activeTab === tab.id
+                  ? 'border-b-2 border-fuchsia-500 text-fuchsia-600 dark:border-fuchsia-400 dark:text-fuchsia-400'
+                  : 'border-b-2 border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
 
         {isLoading ? (
           <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -284,109 +303,110 @@ function App() {
               <SkeletonCard key={index} />
             ))}
           </section>
-        ) : reviews.length === 0 ? (
-          <p>Nu există recenzii momentan</p>
+        ) : reviews.filter((r) => (r.category || 'REVIEWS') === activeTab).length === 0 ? (
+          <p className="text-sm text-zinc-500">Nu există postări în această categorie momentan.</p>
         ) : (
           <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {reviews.map((review) => (
-              <article
-                key={review.id ?? `${review.title}-${review.artist}`}
-                onClick={() => setSelectedReview(review)}
-                className="group relative cursor-pointer overflow-hidden border border-zinc-900/10 bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.02)] transition duration-300 transition-transform hover:-translate-y-1 hover:scale-[1.02] hover:border-fuchsia-400/70 hover:shadow-[0_12px_34px_-20px_rgba(217,70,239,0.8)] dark:border-white/10 dark:bg-zinc-900/70 dark:hover:border-pink-400/70 dark:hover:shadow-[0_14px_36px_-20px_rgba(244,63,94,0.7)]"
-              >
-              {isAdmin ? (
-  <>
-    {/* Buton Edit (Creionul) */}
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation()
-        setEditingId(review.id)
-        setNewTitle(review.title)
-        setNewArtist(review.artistName || review.artist)
-        setNewSummary(review.summary)
-        setNewContent(review.content || review.continut)
-        setNewRating(review.rating)
-        setIsModalOpen(true)
-      }}
-      className={`absolute bottom-3 right-14 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-500/60 bg-zinc-500/15 text-zinc-600 transition hover:bg-zinc-500/25 dark:text-zinc-300 ${ACTION_BUTTON_CLASSES}`}
-      aria-label="Edit review"
-    >
-      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-      </svg>
-    </button>
+            {reviews
+              .filter((r) => (r.category || 'REVIEWS') === activeTab)
+              .map((review) => (
+                <article
+                  key={review.id ?? `${review.title}`}
+                  onClick={() => setSelectedReview(review)}
+                  className="group relative cursor-pointer overflow-hidden border border-zinc-900/10 bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.02)] transition duration-300 transition-transform hover:-translate-y-1 hover:scale-[1.02] hover:border-fuchsia-400/70 hover:shadow-[0_12px_34px_-20px_rgba(217,70,239,0.8)] dark:border-white/10 dark:bg-zinc-900/70 dark:hover:border-pink-400/70 dark:hover:shadow-[0_14px_36px_-20px_rgba(244,63,94,0.7)]"
+                >
+                  {isAdmin ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setEditingId(review.id)
+                          setNewCategory(review.category || 'REVIEWS')
+                          setNewTitle(review.title)
+                          setNewArtist(review.artistName || '')
+                          setNewSummary(review.summary || '')
+                          setNewContent(review.content || '')
+                          setNewRating(review.rating || 10)
+                          setIsModalOpen(true)
+                        }}
+                        className={`absolute bottom-3 right-14 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-500/60 bg-zinc-500/15 text-zinc-600 transition hover:bg-zinc-500/25 dark:text-zinc-300 ${ACTION_BUTTON_CLASSES}`}
+                        aria-label="Edit post"
+                      >
+                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                      </button>
 
-    {/* Buton Delete (Coșul de gunoi) */}
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation()
-        handleDelete(review.id)
-      }}
-      className={`absolute bottom-3 right-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-rose-500/60 bg-rose-500/15 text-rose-600 transition hover:bg-rose-500/25 dark:text-rose-300 ${ACTION_BUTTON_CLASSES}`}
-      aria-label="Delete review"
-    >
-      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 6h18" />
-        <path d="M8 6V4h8v2" />
-        <path d="M19 6l-1 14H6L5 6" />
-        <path d="M10 11v6" />
-        <path d="M14 11v6" />
-      </svg>
-    </button>
-  </>
-) : null}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDelete(review.id)
+                        }}
+                        className={`absolute bottom-3 right-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-rose-500/60 bg-rose-500/15 text-rose-600 transition hover:bg-rose-500/25 dark:text-rose-300 ${ACTION_BUTTON_CLASSES}`}
+                        aria-label="Delete post"
+                      >
+                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 6h18" />
+                          <path d="M8 6V4h8v2" />
+                          <path d="M19 6l-1 14H6L5 6" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                        </svg>
+                      </button>
+                    </>
+                  ) : null}
 
-                <div className="aspect-square w-full border-b border-zinc-900/10 bg-zinc-900/10 dark:border-white/10 dark:bg-zinc-800/40">
-                  {review.coverUrl ? (
-                    <img
-                      src={getCoverSrc(review.coverUrl)}
-                      alt={review.title || 'Review image'}
-                      className="w-full aspect-square object-cover"
-                    />
-                  ) : (
-                    <div className="h-full w-full bg-gradient-to-br from-fuchsia-500 via-violet-500 to-rose-500 p-4">
-                      <div className="flex h-full flex-col justify-between border border-white/30 bg-black/15 p-3 backdrop-blur-sm">
-                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-white/80">
-                          {review.type || 'Review'}
-                        </p>
-                        <p className="text-xs uppercase tracking-[0.2em] text-white/90">
-                          {review.year || ''}
-                        </p>
+                  <div className="aspect-square w-full border-b border-zinc-900/10 bg-zinc-900/10 dark:border-white/10 dark:bg-zinc-800/40">
+                    {review.coverUrl ? (
+                      <img
+                        src={getCoverSrc(review.coverUrl)}
+                        alt={review.title}
+                        className="w-full aspect-square object-cover"
+                      />
+                    ) : (
+                      <div className="h-full w-full bg-gradient-to-br from-fuchsia-500 via-violet-500 to-rose-500 p-4">
+                        <div className="flex h-full flex-col justify-between border border-white/30 bg-black/15 p-3 backdrop-blur-sm">
+                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-white/80">
+                            {review.category || 'Review'}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
 
-                <div className="space-y-3 p-5">
-                  <h2 className="text-xl font-extrabold leading-tight text-zinc-950 dark:text-white">
-                    {(review.artistName || review.artist) + ' - ' + (review.title || '')}
-                  </h2>
-                  <p className="text-sm uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-400">
-                    {review.artistName || review.artist}
-                  </p>
-                  <p className="line-clamp-3 text-sm text-zinc-500 dark:text-zinc-400">
-                    {review.summary}
-                  </p>
-                  {review.rating !== undefined && review.rating !== null ? (
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-fuchsia-700 dark:text-pink-300">
-                      Rating: {review.rating}/10
-                    </p>
-                  ) : null}
-                  {review.tracks || review.date || review.createdAt || review.artist ? (
-                    <div className="inline-flex border border-zinc-900/20 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-zinc-700 dark:border-white/20 dark:text-zinc-300">
-                      {review.tracks || review.date || review.createdAt || review.artist}
-                    </div>
-                  ) : null}
-                </div>
-              </article>
-            ))}
+                  <div className="space-y-3 p-5">
+                    <h2 className="text-xl font-extrabold leading-tight text-zinc-950 dark:text-white">
+                      {(review.category || 'REVIEWS') === 'REVIEWS'
+                        ? `${review.artistName || ''} - ${review.title}`
+                        : review.title}
+                    </h2>
+                    
+                    {(review.category || 'REVIEWS') === 'REVIEWS' && (
+                      <>
+                        <p className="text-sm uppercase tracking-[0.12em] text-zinc-600 dark:text-zinc-400">
+                          {review.artistName}
+                        </p>
+                        <p className="line-clamp-3 text-sm text-zinc-500 dark:text-zinc-400">
+                          {review.summary}
+                        </p>
+                        {review.rating !== null && (
+                          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-fuchsia-700 dark:text-pink-300">
+                            Rating: {review.rating}/10
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </article>
+              ))}
           </section>
         )}
       </main>
 
+      {/* MODAL EDITARE / CREARE FORMULAR */}
       <AnimatedModal
         isOpen={isModalOpen}
         onClose={() => {
@@ -394,47 +414,60 @@ function App() {
           resetForm()
         }}
         overlayClassName="bg-zinc-950/55 py-6"
-        panelClassName="w-full max-w-xl border border-zinc-900/10 bg-white p-6 shadow-xl dark:border-white/10 dark:bg-zinc-900"
+        panelClassName="w-full max-w-xl border border-zinc-900/10 bg-white p-6 shadow-xl dark:border-white/10 dark:bg-zinc-900 overflow-y-auto max-h-[90vh]"
       >
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-lg font-extrabold text-zinc-950 dark:text-white">
-  {editingId ? 'Edit Post' : 'New Post'}
-</h2>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsModalOpen(false)
-                  resetForm()
-                }}
-                className={`text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100 ${ACTION_BUTTON_CLASSES}`}
-              >
-                Close
-              </button>
-            </div>
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-lg font-extrabold text-zinc-950 dark:text-white">
+            {editingId ? 'Edit Post' : 'New Post'}
+          </h2>
+          <button
+            type="button"
+            onClick={() => {
+              setIsModalOpen(false)
+              resetForm()
+            }}
+            className={`text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100 ${ACTION_BUTTON_CLASSES}`}
+          >
+            Close
+          </button>
+        </div>
 
-            <form onSubmit={handlePublish} className="space-y-4">
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="title"
-                  className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400"
-                >
-                  Titlu
-                </label>
-                <input
-                  id="title"
-                  type="text"
-                  value={newTitle}
-                  onChange={(event) => setNewTitle(event.target.value)}
-                  className="w-full border border-zinc-900/15 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-fuchsia-500 dark:border-white/15 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-pink-400"
-                  required
-                />
-              </div>
+        <form onSubmit={handlePublish} className="space-y-4">
+          <div className="space-y-1.5">
+            <label htmlFor="category" className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+              Categorie
+            </label>
+            <select
+              id="category"
+              value={newCategory}
+              onChange={(event) => setNewCategory(event.target.value)}
+              className="w-full border border-zinc-900/15 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-fuchsia-500 dark:border-white/15 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-pink-400"
+              required
+            >
+              <option value="REVIEWS">REVIEWS</option>
+              <option value="RANKINGS">RANKINGS</option>
+              <option value="DISCUSSION">DISCUSSION</option>
+            </select>
+          </div>
 
+          <div className="space-y-1.5">
+            <label htmlFor="title" className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+              Titlu
+            </label>
+            <input
+              id="title"
+              type="text"
+              value={newTitle}
+              onChange={(event) => setNewTitle(event.target.value)}
+              className="w-full border border-zinc-900/15 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-fuchsia-500 dark:border-white/15 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-pink-400"
+              required
+            />
+          </div>
+
+          {newCategory === 'REVIEWS' && (
+            <>
               <div className="space-y-1.5">
-                <label
-                  htmlFor="artist"
-                  className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400"
-                >
+                <label htmlFor="artist" className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
                   Artist
                 </label>
                 <input
@@ -448,10 +481,7 @@ function App() {
               </div>
 
               <div className="space-y-1.5">
-                <label
-                  htmlFor="rating"
-                  className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400"
-                >
+                <label htmlFor="rating" className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
                   Rating
                 </label>
                 <input
@@ -467,10 +497,7 @@ function App() {
               </div>
 
               <div className="space-y-1.5">
-                <label
-                  htmlFor="summary"
-                  className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400"
-                >
+                <label htmlFor="summary" className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
                   Părere pe scurt
                 </label>
                 <input
@@ -482,112 +509,114 @@ function App() {
                   required
                 />
               </div>
+            </>
+          )}
 
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="cover"
-                  className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400"
-                >
-                  Cover
-                </label>
-                <input
-                  id="cover"
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
-                  className="w-full border border-zinc-900/15 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition file:mr-3 file:border-0 file:bg-zinc-100 file:px-2.5 file:py-1.5 file:text-xs file:font-semibold file:uppercase file:tracking-[0.1em] dark:border-white/15 dark:bg-zinc-950 dark:text-zinc-100 dark:file:bg-zinc-800"
-                />
-              </div>
+          <div className="space-y-1.5">
+            <label htmlFor="cover" className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+              Cover
+            </label>
+            <input
+              id="cover"
+              type="file"
+              accept="image/*"
+              onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+              className="w-full border border-zinc-900/15 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition file:mr-3 file:border-0 file:bg-zinc-100 file:px-2.5 file:py-1.5 file:text-xs file:font-semibold file:uppercase file:tracking-[0.1em] dark:border-white/15 dark:bg-zinc-950 dark:text-zinc-100 dark:file:bg-zinc-800"
+            />
+          </div>
 
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="content"
-                  className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400"
-                >
-                  Conținut
-                </label>
-                <textarea
-                  id="content"
-                  value={newContent}
-                  onChange={(event) => setNewContent(event.target.value)}
-                  className="min-h-40 w-full resize-y border border-zinc-900/15 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-fuchsia-500 dark:border-white/15 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-pink-400"
-                  required
-                />
-              </div>
+          <div className="space-y-1.5">
+            <label htmlFor="content" className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+              Conținut
+            </label>
+            <textarea
+              id="content"
+              value={newContent}
+              onChange={(event) => setNewContent(event.target.value)}
+              className="min-h-40 w-full resize-y border border-zinc-900/15 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-fuchsia-500 dark:border-white/15 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-pink-400"
+              required
+            />
+          </div>
 
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsModalOpen(false)
-                    resetForm()
-                  }}
-                  className={`border border-zinc-900/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-700 transition hover:border-zinc-900/40 dark:border-white/20 dark:text-zinc-300 dark:hover:border-white/40 ${ACTION_BUTTON_CLASSES}`}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPublishing}
-                  className={`border border-fuchsia-500/40 bg-fuchsia-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-fuchsia-700 transition hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-pink-400/40 dark:bg-pink-500/10 dark:text-pink-300 dark:hover:bg-pink-500/20 ${ACTION_BUTTON_CLASSES}`}
-                >
-                  {isPublishing ? 'Publishing...' : 'Publish'}
-                </button>
-              </div>
-            </form>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setIsModalOpen(false)
+                resetForm()
+              }}
+              className={`border border-zinc-900/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-700 transition hover:border-zinc-900/40 dark:border-white/20 dark:text-zinc-300 dark:hover:border-white/40 ${ACTION_BUTTON_CLASSES}`}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isPublishing}
+              className={`border border-fuchsia-500/40 bg-fuchsia-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-fuchsia-700 transition hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-pink-400/40 dark:bg-pink-500/10 dark:text-pink-300 dark:hover:bg-pink-500/20 ${ACTION_BUTTON_CLASSES}`}
+            >
+              {isPublishing ? 'Salvare...' : editingId ? 'Update' : 'Publish'}
+            </button>
+          </div>
+        </form>
       </AnimatedModal>
 
+      {/* MODAL VIZUALIZARE ARTICOL (Read Modal) */}
       <AnimatedModal
         isOpen={Boolean(selectedReview)}
         onClose={() => setSelectedReview(null)}
         overlayClassName="bg-zinc-950/60 px-4 py-6"
         panelClassName="max-h-[90vh] w-full max-w-3xl overflow-y-auto border border-zinc-900/10 bg-white shadow-2xl dark:border-white/10 dark:bg-zinc-900"
       >
-            {selectedReview?.coverUrl ? (
-              <img
-                src={getCoverSrc(selectedReview.coverUrl)}
-                alt={selectedReview.title || 'Review cover'}
-                className="mx-auto mb-6 h-64 w-64 rounded-xl object-cover shadow-2xl md:h-80 md:w-80"
-              />
-            ) : (
-              <div className="mx-auto mb-6 h-64 w-64 rounded-xl bg-gradient-to-br from-fuchsia-500 via-violet-500 to-rose-500 shadow-2xl md:h-80 md:w-80" />
-            )}
+        <div className="p-6 md:p-8">
+          {selectedReview?.coverUrl ? (
+            <img
+              src={getCoverSrc(selectedReview.coverUrl)}
+              alt={selectedReview.title}
+              className="mx-auto mb-6 h-64 w-64 rounded-xl object-cover shadow-2xl md:h-80 md:w-80"
+            />
+          ) : (
+            <div className="mx-auto mb-6 h-64 w-64 rounded-xl bg-gradient-to-br from-fuchsia-500 via-violet-500 to-rose-500 shadow-2xl md:h-80 md:w-80" />
+          )}
 
-            <div className="space-y-4 p-6 md:p-8">
-              <div className="flex items-start justify-between gap-4">
-                <h2 className="text-3xl font-black leading-tight text-zinc-950 dark:text-white">
-                  {(selectedReview?.artistName || selectedReview?.artist || '') +
-                    ' - ' +
-                    (selectedReview?.title || '')}
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => setSelectedReview(null)}
-                  className={`shrink-0 border border-zinc-900/20 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-700 transition hover:border-zinc-900/40 dark:border-white/20 dark:text-zinc-300 dark:hover:border-white/40 ${ACTION_BUTTON_CLASSES}`}
-                >
-                  Close
-                </button>
-              </div>
-
-              {selectedReview?.rating !== undefined &&
-              selectedReview?.rating !== null ? (
-                <p className="inline-flex border border-fuchsia-500/40 bg-fuchsia-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-fuchsia-700 dark:border-pink-400/40 dark:bg-pink-500/10 dark:text-pink-300">
-                  Rating: {selectedReview.rating}/10
-                </p>
-              ) : null}
-
-              {selectedReview?.summary ? (
-                <p className="text-lg italic text-fuchsia-700 dark:text-pink-300">
-                  {selectedReview.summary}
-                </p>
-              ) : null}
-
-              <hr className="my-4 border-neutral-800" />
-
-              <div className="whitespace-pre-wrap text-base leading-relaxed text-zinc-800 dark:text-zinc-200">
-                {selectedReview?.content || selectedReview?.continut}
-              </div>
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <h2 className="text-3xl font-black leading-tight text-zinc-950 dark:text-white">
+                {(selectedReview?.category || 'REVIEWS') === 'REVIEWS'
+                  ? `${selectedReview?.artistName || ''} - ${selectedReview?.title || ''}`
+                  : selectedReview?.title}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setSelectedReview(null)}
+                className={`shrink-0 border border-zinc-900/20 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-700 transition hover:border-zinc-900/40 dark:border-white/20 dark:text-zinc-300 dark:hover:border-white/40 ${ACTION_BUTTON_CLASSES}`}
+              >
+                Close
+              </button>
             </div>
+
+            {(selectedReview?.category || 'REVIEWS') === 'REVIEWS' && selectedReview && (
+              <>
+                {selectedReview.rating !== null && selectedReview.rating !== undefined && (
+                  <p className="inline-flex border border-fuchsia-500/40 bg-fuchsia-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-fuchsia-700 dark:border-pink-400/40 dark:bg-pink-500/10 dark:text-pink-300">
+                    Rating: {selectedReview.rating}/10
+                  </p>
+                )}
+                {selectedReview.summary && (
+                  <p className="text-lg italic text-fuchsia-700 dark:text-pink-300">
+                    {selectedReview.summary}
+                  </p>
+                )}
+              </>
+            )}
+            <hr className="my-4 border-zinc-200 dark:border-zinc-800" />
+
+            <div className="prose prose-zinc prose-fuchsia dark:prose-invert max-w-none">
+  <ReactMarkdown>
+    {selectedReview?.content || ''}
+  </ReactMarkdown>
+</div>
+          </div>
+        </div>
       </AnimatedModal>
 
       <ToastContainer toasts={toasts} />

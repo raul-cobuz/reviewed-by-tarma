@@ -63,6 +63,7 @@ public class ReviewService {
             dto.setContent(review.getContent());
             dto.setSummary(review.getSummary());
             dto.setRating(review.getRating());
+            dto.setCategory(review.getCategory());
 
 
             if (review.getArtistName() != null) {
@@ -95,6 +96,9 @@ public class ReviewService {
         review.setRating(reviewDetails.getRating());
         if (reviewDetails.getCoverUrl() != null) {
             review.setCoverUrl(reviewDetails.getCoverUrl());
+        }
+        if (reviewDetails.getCategory() != null) {
+            review.setCategory(reviewDetails.getCategory());
         }
 
         return reviewRepository.save(review);

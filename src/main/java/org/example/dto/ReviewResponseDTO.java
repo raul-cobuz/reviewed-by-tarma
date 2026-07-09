@@ -82,4 +82,14 @@ public class ReviewResponseDTO {
     public void setId(Long id) {
         this.id = id;
     }
+
+    private String category;
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
 }

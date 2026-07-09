@@ -28,6 +28,10 @@ public class Review {
     private Album album;
 
 
+    @Column(name="category")
+    private String category="REVIEWS";
+
+
 
     public Long getId() {
         return id;
@@ -96,5 +100,13 @@ public class Review {
 
     public void setSummary(String summary) {
         this.summary = summary;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
     }
 }
