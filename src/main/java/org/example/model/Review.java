@@ -31,6 +31,8 @@ public class Review {
     @Column(name="category")
     private String category="REVIEWS";
 
+    @Column(name = "audio_url")
+    private String audioUrl;
 
 
     public Long getId() {
@@ -108,5 +110,13 @@ public class Review {
 
     public void setCategory(String category) {
         this.category = category;
+    }
+
+    public String getAudioUrl() {
+        return audioUrl;
+    }
+
+    public void setAudioUrl(String audioUrl) {
+        this.audioUrl = audioUrl;
     }
 }

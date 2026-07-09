@@ -92,4 +92,14 @@ public class ReviewResponseDTO {
     public void setCategory(String category) {
         this.category = category;
     }
+
+    private String audioUrl;
+
+    public String getAudioUrl() {
+        return audioUrl;
+    }
+
+    public void setAudioUrl(String audioUrl) {
+        this.audioUrl = audioUrl;
+    }
 }

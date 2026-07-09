@@ -64,7 +64,7 @@ public class ReviewService {
             dto.setSummary(review.getSummary());
             dto.setRating(review.getRating());
             dto.setCategory(review.getCategory());
-
+            dto.setAudioUrl(review.getAudioUrl());
 
             if (review.getArtistName() != null) {
                 dto.setArtistName(review.getArtistName());
@@ -99,6 +99,9 @@ public class ReviewService {
         }
         if (reviewDetails.getCategory() != null) {
             review.setCategory(reviewDetails.getCategory());
+        }
+        if (reviewDetails.getAudioUrl() != null) {
+            review.setAudioUrl(reviewDetails.getAudioUrl());
         }
 
         return reviewRepository.save(review);

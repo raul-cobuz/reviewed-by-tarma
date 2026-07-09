@@ -10,6 +10,7 @@ const TABS = [
   { id: 'REVIEWS', label: 'Reviews' },
   { id: 'RANKINGS', label: 'Rankings' },
   { id: 'DISCUSSION', label: 'Discussion' },
+  { id: 'BEATS', label: 'Beats' },
 ]
 
 function SkeletonCard() {
@@ -98,6 +99,7 @@ function App() {
   const [newContent, setNewContent] = useState('')
   const [newRating, setNewRating] = useState(10)
   const [selectedFile, setSelectedFile] = useState(null)
+  const [selectedAudioFile, setSelectedAudioFile] = useState(null)
   const [isPublishing, setIsPublishing] = useState(false)
   const [toasts, setToasts] = useState([])
   const [editingId, setEditingId] = useState(null)
@@ -141,6 +143,7 @@ function App() {
     setNewRating(10)
     setNewCategory('REVIEWS')
     setSelectedFile(null)
+    setSelectedAudioFile(null)
     setEditingId(null)
   }
 
@@ -159,6 +162,8 @@ function App() {
 
     try {
       let uploadedCoverUrl = null
+      let uploadedAudioUrl = null
+
       if (selectedFile) {
         const formData = new FormData()
         formData.append('file', selectedFile)
@@ -171,8 +176,21 @@ function App() {
         uploadedCoverUrl = await uploadResponse.text()
       }
 
+      if (selectedAudioFile) {
+        const formData = new FormData()
+        formData.append('file', selectedAudioFile)
+        const uploadResponse = await fetch(FILE_UPLOAD_ENDPOINT, {
+          method: 'POST',
+          headers: { Authorization: `Basic ${btoa('raul:parolagrea')}` },
+          body: formData,
+        })
+        if (!uploadResponse.ok) throw new Error('Audio upload failed')
+        uploadedAudioUrl = await uploadResponse.text()
+      }
+
       const method = editingId ? 'PUT' : 'POST'
       const url = editingId ? `${REVIEWS_ENDPOINT}/${editingId}` : REVIEWS_ENDPOINT
+      const isReview = newCategory === 'REVIEWS'
 
       const response = await fetch(url, {
         method: method,
@@ -180,14 +198,15 @@ function App() {
           'Content-Type': 'application/json',
           Authorization: `Basic ${btoa('raul:parolagrea')}`,
         },
-      body: JSON.stringify({
+        body: JSON.stringify({
           title: newTitle.trim(),
-          artistName: newCategory === 'REVIEWS' ? newArtist.trim() : "N/A",
-          summary: newCategory === 'REVIEWS' ? newSummary.trim() : "N/A",
+          artistName: isReview ? newArtist.trim() : 'N/A',
+          summary: isReview ? newSummary.trim() : 'N/A',
           content: newContent.trim(),
-          rating: newCategory === 'REVIEWS' ? parseInt(newRating, 10) : 10,
+          rating: isReview ? parseInt(newRating, 10) : 10,
           category: newCategory,
           coverUrl: uploadedCoverUrl || null,
+          audioUrl: uploadedAudioUrl || null,
         }),
       })
 
@@ -447,6 +466,7 @@ function App() {
               <option value="REVIEWS">REVIEWS</option>
               <option value="RANKINGS">RANKINGS</option>
               <option value="DISCUSSION">DISCUSSION</option>
+              <option value="BEATS">BEATS</option>
             </select>
           </div>
 
@@ -525,6 +545,21 @@ function App() {
             />
           </div>
 
+          {newCategory === 'BEATS' && (
+            <div className="space-y-1.5">
+              <label htmlFor="audio" className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+                Audio Beat
+              </label>
+              <input
+                id="audio"
+                type="file"
+                accept="audio/*"
+                onChange={(event) => setSelectedAudioFile(event.target.files?.[0] || null)}
+                className="w-full border border-zinc-900/15 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition file:mr-3 file:border-0 file:bg-zinc-100 file:px-2.5 file:py-1.5 file:text-xs file:font-semibold file:uppercase file:tracking-[0.1em] dark:border-white/15 dark:bg-zinc-950 dark:text-zinc-100 dark:file:bg-zinc-800"
+              />
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <label htmlFor="content" className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
               Conținut
@@ -576,6 +611,14 @@ function App() {
             />
           ) : (
             <div className="mx-auto mb-6 h-64 w-64 rounded-xl bg-gradient-to-br from-fuchsia-500 via-violet-500 to-rose-500 shadow-2xl md:h-80 md:w-80" />
+          )}
+
+          {selectedReview?.audioUrl && (
+            <audio
+              controls
+              src={getCoverSrc(selectedReview.audioUrl)}
+              className="mt-6 w-full rounded-full shadow-md"
+            />
           )}
 
           <div className="space-y-4">
