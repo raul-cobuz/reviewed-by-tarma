@@ -47,4 +47,14 @@ public class ReviewController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateReview(@PathVariable Long id, @RequestBody Review review) {
+        try {
+            Review updatedReview = reviewService.updateReview(id, review);
+            return ResponseEntity.ok(updatedReview);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
 }

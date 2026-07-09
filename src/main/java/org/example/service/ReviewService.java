@@ -84,4 +84,19 @@ public class ReviewService {
             return dto;
         }).toList();
     }
+
+    public Review updateReview(Long id, Review reviewDetails) {
+        Review review = reviewRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Nu am găsit recenzia cu ID-ul " + id));
+        review.setTitle(reviewDetails.getTitle());
+        review.setArtistName(reviewDetails.getArtistName());
+        review.setSummary(reviewDetails.getSummary());
+        review.setContent(reviewDetails.getContent());
+        review.setRating(reviewDetails.getRating());
+        if (reviewDetails.getCoverUrl() != null) {
+            review.setCoverUrl(reviewDetails.getCoverUrl());
+        }
+
+        return reviewRepository.save(review);
+    }
 }

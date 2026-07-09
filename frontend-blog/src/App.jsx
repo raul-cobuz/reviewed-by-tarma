@@ -16,6 +16,8 @@ function App() {
   const [newContent, setNewContent] = useState('')
   const [newRating, setNewRating] = useState(10)
   const [selectedFile, setSelectedFile] = useState(null)
+  const [existingCoverUrl, setExistingCoverUrl] = useState(null)
+  const [editingId, setEditingId] = useState(null)
   const [isPublishing, setIsPublishing] = useState(false)
 
   useEffect(() => {
@@ -52,6 +54,20 @@ function App() {
     setNewContent('')
     setNewRating(10)
     setSelectedFile(null)
+    setExistingCoverUrl(null)
+    setEditingId(null)
+  }
+
+  const handleEdit = (review) => {
+    setNewTitle(review.title || '')
+    setNewArtist(review.artistName || review.artist || '')
+    setNewSummary(review.summary || '')
+    setNewContent(review.content || review.continut || '')
+    setNewRating(review.rating ?? 10)
+    setSelectedFile(null)
+    setExistingCoverUrl(review.coverUrl || null)
+    setEditingId(review.id)
+    setIsModalOpen(true)
   }
 
   const getCoverSrc = (coverUrl) => {
@@ -97,27 +113,34 @@ function App() {
         uploadedCoverUrl = await uploadResponse.text()
       }
 
-      const response = await fetch(REVIEWS_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Basic ${btoa('raul:parolagrea')}`,
+      const payload = {
+        title: newTitle.trim(),
+        artistName: newArtist.trim(),
+        summary: newSummary.trim(),
+        content: newContent.trim(),
+        rating: parseInt(newRating, 10),
+        coverUrl: uploadedCoverUrl || existingCoverUrl || null,
+      }
+
+      const response = await fetch(
+        editingId ? `${REVIEWS_ENDPOINT}/${editingId}` : REVIEWS_ENDPOINT,
+        {
+          method: editingId ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Basic ${btoa('raul:parolagrea')}`,
+          },
+          body: JSON.stringify(payload),
         },
-        body: JSON.stringify({
-          title: newTitle.trim(),
-          artistName: newArtist.trim(),
-          summary: newSummary.trim(),
-          content: newContent.trim(),
-          rating: parseInt(newRating, 10),
-          coverUrl: uploadedCoverUrl || null,
-        }),
-      }).catch((error) => {
+      ).catch((error) => {
         console.log('Error publishing review:', error)
         throw error
       })
 
       if (!response.ok) {
-        throw new Error(`POST failed with status ${response.status}`)
+        throw new Error(
+          `${editingId ? 'PUT' : 'POST'} failed with status ${response.status}`,
+        )
       }
 
       setIsModalOpen(false)
@@ -185,7 +208,10 @@ function App() {
             {isAdmin ? (
               <button
                 type="button"
-                onClick={() => setIsModalOpen(true)}
+                onClick={() => {
+                  resetForm()
+                  setIsModalOpen(true)
+                }}
                 className="ml-3 inline-flex items-center border border-zinc-900/20 bg-transparent px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-800 transition hover:border-fuchsia-500 hover:text-fuchsia-600 dark:border-white/20 dark:text-zinc-200 dark:hover:border-pink-400 dark:hover:text-pink-300"
               >
                 New Post
@@ -222,6 +248,29 @@ function App() {
                 className="group relative cursor-pointer overflow-hidden border border-zinc-900/10 bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.02)] transition duration-300 transition-transform hover:-translate-y-1 hover:scale-[1.02] hover:border-fuchsia-400/70 hover:shadow-[0_12px_34px_-20px_rgba(217,70,239,0.8)] dark:border-white/10 dark:bg-zinc-900/70 dark:hover:border-pink-400/70 dark:hover:shadow-[0_14px_36px_-20px_rgba(244,63,94,0.7)]"
               >
                 {isAdmin ? (
+                  <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleEdit(review)
+                    }}
+                    className="absolute bottom-3 right-12 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-500/60 bg-amber-500/15 text-amber-600 transition hover:bg-amber-500/25 dark:text-amber-300"
+                    aria-label="Edit review"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                  </button>
                   <button
                     type="button"
                     onClick={(e) => {
@@ -247,6 +296,7 @@ function App() {
                       <path d="M14 11v6" />
                     </svg>
                   </button>
+                  </>
                 ) : null}
 
                 <div className="aspect-square w-full border-b border-zinc-900/10 bg-zinc-900/10 dark:border-white/10 dark:bg-zinc-800/40">
@@ -302,7 +352,7 @@ function App() {
           <div className="w-full max-w-xl border border-zinc-900/10 bg-white p-6 shadow-xl dark:border-white/10 dark:bg-zinc-900">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-lg font-extrabold text-zinc-950 dark:text-white">
-                New Post
+                {editingId ? 'Edit Post' : 'New Post'}
               </h2>
               <button
                 type="button"
@@ -435,7 +485,13 @@ function App() {
                   disabled={isPublishing}
                   className="border border-fuchsia-500/40 bg-fuchsia-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-fuchsia-700 transition hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-pink-400/40 dark:bg-pink-500/10 dark:text-pink-300 dark:hover:bg-pink-500/20"
                 >
-                  {isPublishing ? 'Publishing...' : 'Publish'}
+                  {isPublishing
+                    ? editingId
+                      ? 'Updating...'
+                      : 'Publishing...'
+                    : editingId
+                      ? 'Update'
+                      : 'Publish'}
                 </button>
               </div>
             </form>
