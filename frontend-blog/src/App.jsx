@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
-const REVIEWS_ENDPOINT = 'http://localhost:8080/api/reviews'
-const FILE_UPLOAD_ENDPOINT = 'http://localhost:8080/api/files/upload'
+const BASE_URL = 'https://reviewed-by-tarma-production.up.railway.app';
 
+const REVIEWS_ENDPOINT = `${BASE_URL}/api/reviews`;
+const FILE_UPLOAD_ENDPOINT = `${BASE_URL}/api/files/upload`;
 const ACTION_BUTTON_CLASSES = 'transition-transform active:scale-95'
 
 const TABS = [
@@ -150,7 +151,7 @@ function App() {
   const getCoverSrc = (coverUrl) => {
     if (!coverUrl) return null
     if (coverUrl.startsWith('http://') || coverUrl.startsWith('https://')) return coverUrl
-    return `http://localhost:8080${coverUrl}`
+    return `${BASE_URL}${coverUrl}`
   }
 
   const handlePublish = async (event) => {
@@ -227,7 +228,7 @@ function App() {
 
   const handleDelete = async (id) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/reviews/${id}`, {
+      const response = await fetch(`${BASE_URL}/api/reviews/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Basic ${btoa('raul:parolagrea')}` },
       })
