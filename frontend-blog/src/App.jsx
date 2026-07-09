@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 
 const BASE_URL = 'https://reviewed-by-tarma-production.up.railway.app';
-
 const REVIEWS_ENDPOINT = `${BASE_URL}/api/reviews`;
 const FILE_UPLOAD_ENDPOINT = `${BASE_URL}/api/files/upload`;
 const ACTION_BUTTON_CLASSES = 'transition-transform active:scale-95'
