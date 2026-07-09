@@ -3,6 +3,80 @@ import { useEffect, useState } from 'react'
 const REVIEWS_ENDPOINT = 'http://localhost:8080/api/reviews'
 const FILE_UPLOAD_ENDPOINT = 'http://localhost:8080/api/files/upload'
 
+const ACTION_BUTTON_CLASSES =
+  'transition-transform active:scale-95'
+
+function SkeletonCard() {
+  return (
+    <article className="animate-pulse overflow-hidden border border-zinc-900/10 bg-white dark:border-white/10 dark:bg-zinc-900/70">
+      <div className="aspect-square w-full bg-zinc-200 dark:bg-zinc-800" />
+      <div className="space-y-3 p-5">
+        <div className="h-6 w-3/4 rounded bg-zinc-200 dark:bg-zinc-800" />
+        <div className="h-4 w-1/2 rounded bg-zinc-200 dark:bg-zinc-800" />
+        <div className="h-4 w-full rounded bg-zinc-200 dark:bg-zinc-800" />
+        <div className="h-4 w-5/6 rounded bg-zinc-200 dark:bg-zinc-800" />
+        <div className="h-5 w-20 rounded bg-zinc-200 dark:bg-zinc-800" />
+      </div>
+    </article>
+  )
+}
+
+function AnimatedModal({ isOpen, onClose, overlayClassName, panelClassName, children }) {
+  const [shouldRender, setShouldRender] = useState(isOpen)
+  const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true)
+      const frame = requestAnimationFrame(() => {
+        requestAnimationFrame(() => setIsVisible(true))
+      })
+      return () => cancelAnimationFrame(frame)
+    }
+
+    setIsVisible(false)
+    const timer = setTimeout(() => setShouldRender(false), 300)
+    return () => clearTimeout(timer)
+  }, [isOpen])
+
+  if (!shouldRender) return null
+
+  return (
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center px-4 transition-all duration-300 ease-out ${
+        isVisible ? 'opacity-100' : 'opacity-0'
+      } ${overlayClassName}`}
+      onClick={onClose}
+    >
+      <div
+        className={`transition-all duration-300 ease-out ${
+          isVisible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+        } ${panelClassName}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function ToastContainer({ toasts }) {
+  if (toasts.length === 0) return null
+
+  return (
+    <div className="pointer-events-none fixed right-4 top-4 z-[60] flex w-full max-w-sm flex-col gap-2">
+      {toasts.map((toast) => (
+        <div
+          key={toast.id}
+          className="rounded-lg border border-zinc-700/50 bg-zinc-900 px-4 py-3 text-sm font-medium text-white shadow-xl transition-all duration-300 ease-out"
+        >
+          {toast.message}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -16,9 +90,16 @@ function App() {
   const [newContent, setNewContent] = useState('')
   const [newRating, setNewRating] = useState(10)
   const [selectedFile, setSelectedFile] = useState(null)
-  const [existingCoverUrl, setExistingCoverUrl] = useState(null)
-  const [editingId, setEditingId] = useState(null)
   const [isPublishing, setIsPublishing] = useState(false)
+  const [toasts, setToasts] = useState([])
+  const [editingId, setEditingId] = useState(null)
+  const showToast = (message) => {
+    const id = Date.now() + Math.random()
+    setToasts((prev) => [...prev, { id, message }])
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id))
+    }, 3000)
+  }
 
   useEffect(() => {
     const root = document.documentElement
@@ -54,20 +135,7 @@ function App() {
     setNewContent('')
     setNewRating(10)
     setSelectedFile(null)
-    setExistingCoverUrl(null)
     setEditingId(null)
-  }
-
-  const handleEdit = (review) => {
-    setNewTitle(review.title || '')
-    setNewArtist(review.artistName || review.artist || '')
-    setNewSummary(review.summary || '')
-    setNewContent(review.content || review.continut || '')
-    setNewRating(review.rating ?? 10)
-    setSelectedFile(null)
-    setExistingCoverUrl(review.coverUrl || null)
-    setEditingId(review.id)
-    setIsModalOpen(true)
   }
 
   const getCoverSrc = (coverUrl) => {
@@ -78,82 +146,60 @@ function App() {
     return `http://localhost:8080${coverUrl}`
   }
 
-  const handlePublish = async (event) => {
+ const handlePublish = async (event) => {
     event.preventDefault()
-
-    if (
-      !newTitle.trim() ||
-      !newArtist.trim() ||
-      !newSummary.trim() ||
-      !newContent.trim()
-    )
-      return
+    if (!newTitle.trim() || !newArtist.trim() || !newSummary.trim() || !newContent.trim()) return
 
     setIsPublishing(true)
 
     try {
       let uploadedCoverUrl = null
-
       if (selectedFile) {
         const formData = new FormData()
         formData.append('file', selectedFile)
-
         const uploadResponse = await fetch(FILE_UPLOAD_ENDPOINT, {
           method: 'POST',
-          headers: {
-            Authorization: `Basic ${btoa('raul:parolagrea')}`,
-          },
+          headers: { Authorization: `Basic ${btoa('raul:parolagrea')}` },
           body: formData,
         })
-
-        if (!uploadResponse.ok) {
-          throw new Error(`Upload failed with status ${uploadResponse.status}`)
-        }
-
+        if (!uploadResponse.ok) throw new Error('Upload failed')
         uploadedCoverUrl = await uploadResponse.text()
       }
 
-      const payload = {
-        title: newTitle.trim(),
-        artistName: newArtist.trim(),
-        summary: newSummary.trim(),
-        content: newContent.trim(),
-        rating: parseInt(newRating, 10),
-        coverUrl: uploadedCoverUrl || existingCoverUrl || null,
-      }
+      const method = editingId ? 'PUT' : 'POST'
+      const url = editingId ? `${REVIEWS_ENDPOINT}/${editingId}` : REVIEWS_ENDPOINT
 
-      const response = await fetch(
-        editingId ? `${REVIEWS_ENDPOINT}/${editingId}` : REVIEWS_ENDPOINT,
-        {
-          method: editingId ? 'PUT' : 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Basic ${btoa('raul:parolagrea')}`,
-          },
-          body: JSON.stringify(payload),
+      const response = await fetch(url, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Basic ${btoa('raul:parolagrea')}`,
         },
-      ).catch((error) => {
-        console.log('Error publishing review:', error)
-        throw error
+        body: JSON.stringify({
+          title: newTitle.trim(),
+          artistName: newArtist.trim(),
+          summary: newSummary.trim(),
+          content: newContent.trim(),
+          rating: parseInt(newRating, 10),
+          coverUrl: uploadedCoverUrl || null,
+        }),
       })
 
-      if (!response.ok) {
-        throw new Error(
-          `${editingId ? 'PUT' : 'POST'} failed with status ${response.status}`,
-        )
-      }
+      if (!response.ok) throw new Error(`${method} failed`)
 
       setIsModalOpen(false)
       resetForm()
+      setEditingId(null) 
       setIsLoading(true)
       await fetchReviews()
+      showToast(editingId ? 'Recenzie actualizată!' : 'Recenzie publicată!')
     } catch (error) {
-      console.log('Error publishing review:', error)
+      console.log('Error:', error)
+      showToast('Eroare.')
     } finally {
       setIsPublishing(false)
     }
   }
-
   const handleDelete = async (id) => {
     try {
       const response = await fetch(`http://localhost:8080/api/reviews/${id}`, {
@@ -168,8 +214,10 @@ function App() {
       }
 
       setReviews((prev) => prev.filter((review) => review.id !== id))
+      showToast('Recenzie ștearsă!')
     } catch (error) {
       console.log('Error deleting review:', error)
+      showToast('Eroare la ștergere.')
     }
   }
 
@@ -177,6 +225,7 @@ function App() {
     const password = window.prompt('Parola de acces:')
     if (password === 'tarma2026') {
       setIsAdmin(true)
+      showToast('Mod Admin activat!')
     }
   }
 
@@ -191,7 +240,7 @@ function App() {
               Reviewed By Tarma
             </p>
             <p className="text-xs uppercase tracking-[0.2em] text-zinc-600 dark:text-zinc-400">
-              album reviews / beats / tracklists
+              album reviews / rankings / music discussion
             </p>
           </div>
 
@@ -199,7 +248,7 @@ function App() {
             <button
               type="button"
               onClick={() => setIsDarkMode((prev) => !prev)}
-              className="inline-flex items-center gap-2 border border-zinc-900/20 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-900 transition hover:border-fuchsia-500 hover:text-fuchsia-600 dark:border-white/20 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-pink-400 dark:hover:text-pink-300"
+              className={`inline-flex items-center gap-2 border border-zinc-900/20 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-900 transition hover:border-fuchsia-500 hover:text-fuchsia-600 dark:border-white/20 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-pink-400 dark:hover:text-pink-300 ${ACTION_BUTTON_CLASSES}`}
             >
               <span className="h-2.5 w-2.5 bg-gradient-to-r from-fuchsia-500 to-rose-500" />
               {isDarkMode ? 'Light Mode' : 'Dark Mode'}
@@ -208,11 +257,8 @@ function App() {
             {isAdmin ? (
               <button
                 type="button"
-                onClick={() => {
-                  resetForm()
-                  setIsModalOpen(true)
-                }}
-                className="ml-3 inline-flex items-center border border-zinc-900/20 bg-transparent px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-800 transition hover:border-fuchsia-500 hover:text-fuchsia-600 dark:border-white/20 dark:text-zinc-200 dark:hover:border-pink-400 dark:hover:text-pink-300"
+                onClick={() => setIsModalOpen(true)}
+                className={`ml-3 inline-flex items-center border border-zinc-900/20 bg-transparent px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-800 transition hover:border-fuchsia-500 hover:text-fuchsia-600 dark:border-white/20 dark:text-zinc-200 dark:hover:border-pink-400 dark:hover:text-pink-300 ${ACTION_BUTTON_CLASSES}`}
               >
                 New Post
               </button>
@@ -227,16 +273,17 @@ function App() {
             Music Blog
           </p>
           <h1 className="mb-3 text-4xl font-black leading-tight md:text-5xl">
-            Album Reviews cu Energie, Beat-Making cu Atitudine
+            Imi dau si eu cu parerea pe net :)
           </h1>
-          <p className="text-sm text-zinc-700 dark:text-zinc-300">
-            Descoperim albume noi, disecam tracklists si intram in procesul de
-            productie, de la groove la mix.
-          </p>
+         
         </header>
 
         {isLoading ? (
-          <p>Loading...</p>
+          <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <SkeletonCard key={index} />
+            ))}
+          </section>
         ) : reviews.length === 0 ? (
           <p>Nu există recenzii momentan</p>
         ) : (
@@ -247,57 +294,50 @@ function App() {
                 onClick={() => setSelectedReview(review)}
                 className="group relative cursor-pointer overflow-hidden border border-zinc-900/10 bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.02)] transition duration-300 transition-transform hover:-translate-y-1 hover:scale-[1.02] hover:border-fuchsia-400/70 hover:shadow-[0_12px_34px_-20px_rgba(217,70,239,0.8)] dark:border-white/10 dark:bg-zinc-900/70 dark:hover:border-pink-400/70 dark:hover:shadow-[0_14px_36px_-20px_rgba(244,63,94,0.7)]"
               >
-                {isAdmin ? (
-                  <>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleEdit(review)
-                    }}
-                    className="absolute bottom-3 right-12 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-500/60 bg-amber-500/15 text-amber-600 transition hover:bg-amber-500/25 dark:text-amber-300"
-                    aria-label="Edit review"
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M12 20h9" />
-                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDelete(review.id)
-                    }}
-                    className="absolute bottom-3 right-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-rose-500/60 bg-rose-500/15 text-rose-600 transition hover:bg-rose-500/25 dark:text-rose-300"
-                    aria-label="Delete review"
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M3 6h18" />
-                      <path d="M8 6V4h8v2" />
-                      <path d="M19 6l-1 14H6L5 6" />
-                      <path d="M10 11v6" />
-                      <path d="M14 11v6" />
-                    </svg>
-                  </button>
-                  </>
-                ) : null}
+              {isAdmin ? (
+  <>
+    {/* Buton Edit (Creionul) */}
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        setEditingId(review.id)
+        setNewTitle(review.title)
+        setNewArtist(review.artistName || review.artist)
+        setNewSummary(review.summary)
+        setNewContent(review.content || review.continut)
+        setNewRating(review.rating)
+        setIsModalOpen(true)
+      }}
+      className={`absolute bottom-3 right-14 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-500/60 bg-zinc-500/15 text-zinc-600 transition hover:bg-zinc-500/25 dark:text-zinc-300 ${ACTION_BUTTON_CLASSES}`}
+      aria-label="Edit review"
+    >
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+      </svg>
+    </button>
+
+    {/* Buton Delete (Coșul de gunoi) */}
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        handleDelete(review.id)
+      }}
+      className={`absolute bottom-3 right-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-rose-500/60 bg-rose-500/15 text-rose-600 transition hover:bg-rose-500/25 dark:text-rose-300 ${ACTION_BUTTON_CLASSES}`}
+      aria-label="Delete review"
+    >
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 6h18" />
+        <path d="M8 6V4h8v2" />
+        <path d="M19 6l-1 14H6L5 6" />
+        <path d="M10 11v6" />
+        <path d="M14 11v6" />
+      </svg>
+    </button>
+  </>
+) : null}
 
                 <div className="aspect-square w-full border-b border-zinc-900/10 bg-zinc-900/10 dark:border-white/10 dark:bg-zinc-800/40">
                   {review.coverUrl ? (
@@ -347,20 +387,26 @@ function App() {
         )}
       </main>
 
-      {isModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/55 px-4">
-          <div className="w-full max-w-xl border border-zinc-900/10 bg-white p-6 shadow-xl dark:border-white/10 dark:bg-zinc-900">
+      <AnimatedModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false)
+          resetForm()
+        }}
+        overlayClassName="bg-zinc-950/55 py-6"
+        panelClassName="w-full max-w-xl border border-zinc-900/10 bg-white p-6 shadow-xl dark:border-white/10 dark:bg-zinc-900"
+      >
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-lg font-extrabold text-zinc-950 dark:text-white">
-                {editingId ? 'Edit Post' : 'New Post'}
-              </h2>
+  {editingId ? 'Edit Post' : 'New Post'}
+</h2>
               <button
                 type="button"
                 onClick={() => {
                   setIsModalOpen(false)
                   resetForm()
                 }}
-                className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                className={`text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100 ${ACTION_BUTTON_CLASSES}`}
               >
                 Close
               </button>
@@ -476,91 +522,80 @@ function App() {
                     setIsModalOpen(false)
                     resetForm()
                   }}
-                  className="border border-zinc-900/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-700 transition hover:border-zinc-900/40 dark:border-white/20 dark:text-zinc-300 dark:hover:border-white/40"
+                  className={`border border-zinc-900/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-700 transition hover:border-zinc-900/40 dark:border-white/20 dark:text-zinc-300 dark:hover:border-white/40 ${ACTION_BUTTON_CLASSES}`}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isPublishing}
-                  className="border border-fuchsia-500/40 bg-fuchsia-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-fuchsia-700 transition hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-pink-400/40 dark:bg-pink-500/10 dark:text-pink-300 dark:hover:bg-pink-500/20"
+                  className={`border border-fuchsia-500/40 bg-fuchsia-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-fuchsia-700 transition hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-pink-400/40 dark:bg-pink-500/10 dark:text-pink-300 dark:hover:bg-pink-500/20 ${ACTION_BUTTON_CLASSES}`}
                 >
-                  {isPublishing
-                    ? editingId
-                      ? 'Updating...'
-                      : 'Publishing...'
-                    : editingId
-                      ? 'Update'
-                      : 'Publish'}
+                  {isPublishing ? 'Publishing...' : 'Publish'}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      ) : null}
+      </AnimatedModal>
 
-      {selectedReview ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/60 px-4 py-6"
-          onClick={() => setSelectedReview(null)}
-        >
-          <div
-            className="max-h-[90vh] w-full max-w-3xl overflow-y-auto border border-zinc-900/10 bg-white shadow-2xl dark:border-white/10 dark:bg-zinc-900"
-            onClick={(event) => event.stopPropagation()}
-          >
-            {selectedReview.coverUrl ? (
+      <AnimatedModal
+        isOpen={Boolean(selectedReview)}
+        onClose={() => setSelectedReview(null)}
+        overlayClassName="bg-zinc-950/60 px-4 py-6"
+        panelClassName="max-h-[90vh] w-full max-w-3xl overflow-y-auto border border-zinc-900/10 bg-white shadow-2xl dark:border-white/10 dark:bg-zinc-900"
+      >
+            {selectedReview?.coverUrl ? (
               <img
                 src={getCoverSrc(selectedReview.coverUrl)}
                 alt={selectedReview.title || 'Review cover'}
-                className="w-64 h-64 md:w-80 md:h-80 object-cover rounded-xl shadow-2xl mx-auto mb-6"
+                className="mx-auto mb-6 h-64 w-64 rounded-xl object-cover shadow-2xl md:h-80 md:w-80"
               />
             ) : (
-              <div className="w-64 h-64 md:w-80 md:h-80 rounded-xl shadow-2xl mx-auto mb-6 bg-gradient-to-br from-fuchsia-500 via-violet-500 to-rose-500" />
+              <div className="mx-auto mb-6 h-64 w-64 rounded-xl bg-gradient-to-br from-fuchsia-500 via-violet-500 to-rose-500 shadow-2xl md:h-80 md:w-80" />
             )}
 
             <div className="space-y-4 p-6 md:p-8">
               <div className="flex items-start justify-between gap-4">
                 <h2 className="text-3xl font-black leading-tight text-zinc-950 dark:text-white">
-                  {(selectedReview.artistName || selectedReview.artist || '') +
+                  {(selectedReview?.artistName || selectedReview?.artist || '') +
                     ' - ' +
-                    (selectedReview.title || '')}
+                    (selectedReview?.title || '')}
                 </h2>
                 <button
                   type="button"
                   onClick={() => setSelectedReview(null)}
-                  className="shrink-0 border border-zinc-900/20 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-700 transition hover:border-zinc-900/40 dark:border-white/20 dark:text-zinc-300 dark:hover:border-white/40"
+                  className={`shrink-0 border border-zinc-900/20 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-700 transition hover:border-zinc-900/40 dark:border-white/20 dark:text-zinc-300 dark:hover:border-white/40 ${ACTION_BUTTON_CLASSES}`}
                 >
                   Close
                 </button>
               </div>
 
-              {selectedReview.rating !== undefined &&
-              selectedReview.rating !== null ? (
+              {selectedReview?.rating !== undefined &&
+              selectedReview?.rating !== null ? (
                 <p className="inline-flex border border-fuchsia-500/40 bg-fuchsia-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-fuchsia-700 dark:border-pink-400/40 dark:bg-pink-500/10 dark:text-pink-300">
                   Rating: {selectedReview.rating}/10
                 </p>
               ) : null}
 
-              {selectedReview.summary ? (
+              {selectedReview?.summary ? (
                 <p className="text-lg italic text-fuchsia-700 dark:text-pink-300">
                   {selectedReview.summary}
                 </p>
               ) : null}
 
-              <hr className="border-neutral-800 my-4" />
+              <hr className="my-4 border-neutral-800" />
 
               <div className="whitespace-pre-wrap text-base leading-relaxed text-zinc-800 dark:text-zinc-200">
-                {selectedReview.content || selectedReview.continut}
+                {selectedReview?.content || selectedReview?.continut}
               </div>
             </div>
-          </div>
-        </div>
-      ) : null}
+      </AnimatedModal>
+
+      <ToastContainer toasts={toasts} />
 
       <button
         type="button"
         onClick={handleAdminAccess}
-        className="fixed bottom-3 right-4 text-[0.65rem] font-medium uppercase tracking-[0.18em] text-neutral-800/45 transition hover:text-neutral-800/70 dark:text-zinc-300/30 dark:hover:text-zinc-300/55"
+        className={`fixed bottom-3 right-4 text-[0.65rem] font-medium uppercase tracking-[0.18em] text-neutral-800/45 transition hover:text-neutral-800/70 dark:text-zinc-300/30 dark:hover:text-zinc-300/55 ${ACTION_BUTTON_CLASSES}`}
       >
         Admin
       </button>
